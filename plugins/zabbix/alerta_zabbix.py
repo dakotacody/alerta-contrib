@@ -17,6 +17,7 @@ DEFAULT_ZABBIX_API_URL = 'http://localhost:10080'
 ZABBIX_API_URL = os.environ.get('ZABBIX_API_URL') or app.config.get('ZABBIX_API_URL', None)
 ZABBIX_USER = os.environ.get('ZABBIX_USER') or app.config['ZABBIX_USER']
 ZABBIX_PASSWORD = os.environ.get('ZABBIX_PASSWORD') or app.config['ZABBIX_PASSWORD']
+ZABBIX_CLOSED_STATES = os.environ.get('ZABBIX_CLOSED_STATES') or app.config.get('ZABBIX_CLOSED_STATES', ['closed'])
 
 # See https://www.zabbix.com/documentation/4.0/manual/api/reference/event/acknowledge
 
@@ -40,7 +41,7 @@ class ZabbixEventAck(PluginBase):
         if alert.event_type != 'zabbixAlert':
             return
 
-        if alert.status == status or not status in ['ack', 'closed']:
+        if alert.status == status or status not in ['ack', 'closed', 'expired']:
             return
 
         event_id = alert.attributes.get('eventId', None)
@@ -81,8 +82,8 @@ class ZabbixEventAck(PluginBase):
             LOG.debug('Zabbix: event.acknowledge(ack) => %s', r)
             text = text + ' (acknowledged in Zabbix)'
 
-        elif status == 'closed':
-
+        elif any(status == k for k in ZABBIX_CLOSED_STATES):
+            LOG.debug('status of alert ID %s : %s is one of the ZABBIX_CLOSED_STATES %s', alert.id, status, ZABBIX_CLOSED_STATES)
             try:
                 r = self.zapi.event.get(objectids=trigger_id, output='extend', sortfield='clock', sortorder='DESC', limit=10)
                 event_ids = [e['eventid'] for e in r]
